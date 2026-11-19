@@ -8,7 +8,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: www.__DOMAIN__
+    - host: www.id-367.com
       http:
         paths:
           - path: /about
@@ -44,7 +44,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: admin.__DOMAIN__
+    - host: admin.id-367.com
       http:
         paths:
           - path: /

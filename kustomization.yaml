@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - manifests/10-app-about.yaml
+  - manifests/20-app-research.yaml
+  - manifests/30-app-api.yaml
+  - manifests/40-ingress.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: student-info
+    envs:
+      - config.env
+  - name: app-about-code
+    files:
+      - app.py=app-about/app.py
+  - name: app-about-photo
+    files:
+      - photo.jpg=app-about/photo.jpg
+  - name: app-research-code
+    files:
+      - app.py=app-research/app.py
+  - name: app-research-seed
+    files:
+      - research.seed.md=app-research/research.seed.md
+  - name: app-api-code
+    files:
+      - app.py=app-api/app.py

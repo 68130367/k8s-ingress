@@ -4,9 +4,8 @@ cd "$(dirname "$0")/.."
 
 : "${INGRESS_IP:?ตั้ง INGRESS_IP ก่อน เช่น INGRESS_IP=192.168.214.139}"
 PORT="${INGRESS_PORT:-80}"
-SUFFIX="$(grep -E '^ID_SUFFIX=' config.env | cut -d= -f2-)"
 SID="$(grep -E '^STUDENT_ID=' config.env | cut -d= -f2-)"
-DOMAIN="id-${SUFFIX}.com"
+DOMAIN="${DOMAIN:-id-367.com}"
 WWW="www.${DOMAIN}"; ADMIN="admin.${DOMAIN}"
 
 pass=0; fail=0
@@ -15,8 +14,7 @@ t() {
   local name="$1" host="$2" path="$3" want="$4" needle="${5:-}" out code body i
   for i in $(seq 1 10); do
     out="$(req "$host" "$path")"; code="${out##*STATUS:}"; body="${out%STATUS:*}"
-    [[ "$code" == "503" && "$want" != "503" ]] || break
-    sleep 1
+    if [[ "$code" == "503" || ( "$code" == "404" && "$want" != "404" ) ]]; then sleep 1; else break; fi
   done
   if [[ "$code" == "$want" ]] && { [[ -z "$needle" ]] || grep -qF -- "$needle" <<<"$body"; }; then
     echo "PASS  $name  ($host$path -> $code)"; pass=$((pass+1))

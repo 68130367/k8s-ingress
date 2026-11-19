@@ -1,6 +1,6 @@
 # K8s Ingress Assignment
 
-บริการ 4 ตัวบน Kubernetes เข้าถึงผ่าน ingress-nginx ด้วย domain `id-367.com` ตามเลข 3 ตัวท้ายรหัสนักศึกษาที่ตั้งไว้ใน `config.env`
+บริการ 4 ตัวบน Kubernetes เข้าถึงผ่าน ingress-nginx ด้วย domain `id-367.com`
 
 | URL | หน้าที่ | Ingress | Service | จำนวน Pod |
 |---|---|---|---|---|
@@ -28,19 +28,23 @@ flowchart LR
 ## สิ่งที่ต้องมี
 
 - cluster Kubernetes ที่ `kubectl` ต่อได้ เช่น minikube, Docker Desktop Kubernetes หรือ kubeadm (ตรวจด้วย `kubectl cluster-info`)
-- `bash` และ `curl` สำหรับรัน script (macOS และ Linux มีอยู่แล้ว ส่วน Windows ให้รันใน Git Bash หรือ WSL)
-- ไม่ต้อง build หรือ push image เพราะทุก app ใช้ image สาธารณะ `python:3.12-alpine` ส่วนโค้ดของแต่ละ app เป็นไฟล์ `app.py` ไฟล์เดียวที่ใช้แค่ stdlib และ `deploy.sh` จะสร้าง ConfigMap จากไฟล์ใน repo แล้ว mount เข้า pod ให้
-- ไม่ต้องแก้อะไรก่อนรัน ชื่อ รหัสนักศึกษา และเลข 3 ตัวท้ายตั้งไว้ใน `config.env` แล้ว รูปอยู่ที่ `app-about/photo.jpg` และสรุปงานวิจัยอยู่ที่ `app-research/research.seed.md`
+- ทุกขั้นตอนหลักใช้แค่ `kubectl` จึงรันได้เหมือนกันบน macOS, Linux และ Windows (PowerShell หรือ CMD) ไม่ต้องมี bash ส่วน script `*.sh` กับ `curl` เป็นทางลัดทางเลือก ต้องใช้ bash (macOS และ Linux มีอยู่แล้ว ส่วน Windows ให้รันใน Git Bash หรือ WSL)
+- ไม่ต้อง build หรือ push image เพราะทุก app ใช้ image สาธารณะ `python:3.12-alpine` ส่วนโค้ดของแต่ละ app เป็นไฟล์ `app.py` ไฟล์เดียวที่ใช้แค่ stdlib และ `kubectl apply -k .` จะสร้าง ConfigMap จากไฟล์ใน repo (ตามที่เขียนใน `kustomization.yaml`) แล้ว mount เข้า pod ให้
+- ไม่ต้องแก้อะไรก่อนรัน ชื่อและรหัสนักศึกษาอยู่ใน `config.env` โดเมนอยู่ใน `manifests/40-ingress.yaml` รูปอยู่ที่ `app-about/photo.jpg` และสรุปงานวิจัยอยู่ที่ `app-research/research.seed.md`
 
 ## วิธี run ตั้งแต่ต้นจนจบ
+
+คำสั่งในทุกบล็อกด้านล่างใช้ได้เหมือนกันใน bash, zsh, PowerShell และ CMD ยกเว้นที่ระบุไว้
 
 ### 0. Clone แล้วเข้าโฟลเดอร์
 
 ```bash
 git clone <URL ของ repo นี้>
 cd <โฟลเดอร์ที่ clone ได้>
-kubectl config current-context        # ตรวจว่าชี้ไปที่ cluster ที่ต้องการ
+kubectl config current-context
 ```
+
+คำสั่งสุดท้ายแสดงชื่อ cluster ที่ `kubectl` ใช้อยู่ ให้ตรวจว่าเป็นตัวที่ต้องการ
 
 ### 1. ติดตั้ง ingress-nginx
 
@@ -57,28 +61,54 @@ minikube addons enable ingress
 kubectl wait -n ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=240s
 ```
 
-**ถ้าใช้ Docker Desktop Kubernetes, kubeadm หรือ cluster อื่น** ให้ติดตั้งจาก manifest แบบ bare metal แล้วล็อก NodePort ของ http ไว้ที่ 31080 เพื่อให้ข้อ 3 และ load balancer ชี้พอร์ตได้ตรงกัน
+**ถ้าใช้ Docker Desktop Kubernetes, kubeadm หรือ cluster อื่น** ให้ติดตั้งจาก manifest แบบ bare metal แล้วล็อก NodePort ของ http ไว้ที่ 31080 เพื่อให้ข้อ 4 และ load balancer ชี้พอร์ตได้ตรงกัน
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.1/deploy/static/provider/baremetal/deploy.yaml
 kubectl wait -n ingress-nginx --for=condition=ready pod -l app.kubernetes.io/component=controller --timeout=240s
 kubectl -n ingress-nginx patch svc ingress-nginx-controller -p '{"spec":{"ports":[{"port":80,"nodePort":31080}]}}'
-kubectl get svc -n ingress-nginx      # ต้องเห็น 80:31080/TCP
+kubectl get svc -n ingress-nginx
 ```
+
+คำสั่งสุดท้ายต้องเห็น `80:31080/TCP` ในคอลัมน์ PORT(S)
 
 ### 2. Deploy
 
 ```bash
-./deploy.sh
+kubectl apply -k .
+kubectl wait --for=condition=available deployment -l app.kubernetes.io/part-of=k8s-ingress-assignment --timeout=180s
 ```
 
-script จะสร้าง ConfigMap, PVC, Deployment, Service และ Ingress ทั้งหมด แล้วรอจน pod ของทั้ง 3 app พร้อม ถ้าจบโดยไม่มี `ERROR` ก็แปลว่า deploy ผ่าน และรันซ้ำได้เลยไม่ต้องลบของเดิมก่อน
+คำสั่งแรกอ่าน `kustomization.yaml` แล้วสร้าง ConfigMap, PVC, Deployment, Service และ Ingress ทั้งหมดในครั้งเดียว คำสั่งที่สองรอจน pod ของทั้ง 3 app พร้อม ถ้าจบโดยไม่มี error ก็แปลว่า deploy ผ่าน และรันซ้ำได้เลยไม่ต้องลบของเดิมก่อน
 
-ถ้า cluster ไม่มี default StorageClass (เช่น kubeadm) script จะสร้าง hostPath PV ให้เอง
+ถ้า cluster ไม่มี default StorageClass (ดูจาก `kubectl get storageclass` ว่าไม่มีตัวที่ต่อท้ายว่า `(default)` เช่น kubeadm) PVC จะค้างสถานะ Pending ให้สร้าง hostPath PV เพิ่มด้วยคำสั่งนี้
+
+```bash
+kubectl apply -f manifests/storage-hostpath.yaml
+```
+
+ถ้าใช้ bash จะใช้ทางลัด `./deploy.sh` แทนก็ได้ script นี้ตรวจว่ามี ingress-nginx แล้วสร้าง hostPath PV ให้เองเมื่อไม่มี default StorageClass จากนั้นรัน `kubectl apply -k .` และรอ pod พร้อม
 
 ### 3. ทดสอบอัตโนมัติ
 
-`tests/check.sh` ยิง request ไปที่ ingress ด้วย `curl --resolve` จึงไม่ต้องแก้ไฟล์ hosts ก่อน แต่ต้องบอกว่า request เข้า ingress ได้ที่ไหนด้วยสองค่านี้
+ทดสอบด้วย Job ที่รันใน cluster เอง ยิง request ผ่านชื่อ Service ของ ingress-nginx ภายใน cluster จึงไม่ต้องรู้ IP ไม่ต้องตั้ง `port-forward` และไม่ต้องแก้ไฟล์ hosts
+
+```bash
+kubectl delete -k tests --ignore-not-found
+kubectl apply -k tests
+kubectl wait --for=condition=complete job/ingress-check --timeout=180s
+kubectl logs job/ingress-check
+```
+
+ผลที่ถูกต้องคือ `logs` ขึ้น `PASS` ครบ 9 ข้อ บรรทัดสุดท้ายเป็น `---- pass=9 fail=0` และ Job อยู่ในสถานะ Complete (ดูด้วย `kubectl get job ingress-check`) ถ้ามีข้อที่ `FAIL` Job จะเป็น Failed และคำสั่ง `wait` จะรอจนหมดเวลา ให้ดูข้อที่ล้มจาก `kubectl logs job/ingress-check`
+
+ถ้า Service ของ ingress-nginx ไม่ได้ชื่อ `ingress-nginx-controller` ใน namespace `ingress-nginx` (เช่น ติดตั้งด้วย Helm ที่ตั้งชื่อเอง) ให้เพิ่ม env `INGRESS_HOST` ชื่อ Service เต็ม ลงใน `tests/check-job.yaml` ตรงส่วน `env`
+
+### 4. เปิดดูในเบราว์เซอร์
+
+ingress เลือก app จากชื่อโดเมนที่เบราว์เซอร์ส่งมา เปิด `localhost` หรือ IP ตรง ๆ จะได้ 404 จึงต้องให้เครื่องรู้ว่า `www.id-367.com` และ `admin.id-367.com` คือเครื่องนี้ ต้องหา IP และพอร์ตที่เข้า ingress ได้ก่อน
+
+**หา `INGRESS_IP` และ `INGRESS_PORT`**
 
 - `INGRESS_IP` คือ IP ของเครื่องที่รับ request เข้า ingress-nginx เมื่อมองจากเครื่องที่คุณพิมพ์คำสั่ง
 - `INGRESS_PORT` คือพอร์ตของเครื่องนั้น
@@ -100,7 +130,7 @@ script จะสร้าง ConfigMap, PVC, Deployment, Service และ Ingre
 kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80
 ```
 
-ก่อนรัน `check.sh` ลองตรวจสองค่านี้ด้วยคำสั่งเดียว ถ้าได้ `200` แปลว่าเข้า ingress ได้ (ต้อง deploy ตามข้อ 2 แล้ว)
+ลองตรวจสองค่านี้ด้วยคำสั่งเดียว ถ้าได้ `200` แปลว่าเข้า ingress ได้ (ต้อง deploy ตามข้อ 2 แล้ว) ใน PowerShell บน Windows ให้พิมพ์ `curl.exe` แทน `curl` เพราะ `curl` ในนั้นเป็นชื่อย่อของคำสั่งอื่น
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -H "Host: www.id-367.com" http://<INGRESS_IP>:<INGRESS_PORT>/about
@@ -108,21 +138,9 @@ curl -s -o /dev/null -w "%{http_code}\n" -H "Host: www.id-367.com" http://<INGRE
 
 ถ้าได้ `000` หรือค้างจนหมดเวลา แปลว่าเครื่องที่รันต่อ IP หรือพอร์ตนั้นไม่ถึง ให้ลองแถวอื่นในตาราง เพราะ IP ใน `kubectl get nodes` บางแบบอยู่ในเครือข่ายภายใน เช่น Docker Desktop ที่ได้ `192.168.65.3` ซึ่งเข้าจากเครื่องที่รันไม่ได้ ต้องใช้ `127.0.0.1` แทน
 
-จากนั้นรัน
+**เพิ่มชื่อโดเมนลงไฟล์ hosts**
 
-```bash
-INGRESS_IP=<INGRESS_IP> INGRESS_PORT=<INGRESS_PORT> ./tests/check.sh
-```
-
-ตัวอย่างบน Docker Desktop คือ `INGRESS_IP=127.0.0.1 INGRESS_PORT=31080 ./tests/check.sh`
-
-ผลที่ถูกต้องคือขึ้น `PASS` ครบ 9 ข้อ และบรรทัดสุดท้ายเป็น `---- pass=9 fail=0` script จะบันทึกผลไว้ที่ `tests/results.txt` และจบด้วย exit code 0 เมื่อผ่านทั้งหมด
-
-### 4. เปิดดูในเบราว์เซอร์
-
-ingress เลือก app จากชื่อโดเมนที่เบราว์เซอร์ส่งมา เปิด `localhost` หรือ IP ตรง ๆ จะได้ 404 จึงต้องให้เครื่องรู้ว่า `www.id-367.com` และ `admin.id-367.com` คือเครื่องนี้
-
-เพิ่มบรรทัด `<INGRESS_IP> www.id-367.com admin.id-367.com` ลงในไฟล์ hosts ของระบบที่ใช้เปิดเบราว์เซอร์ โดย `<INGRESS_IP>` คือค่าเดียวกับที่หาได้ในข้อ 3 และต้องใช้สิทธิ์ admin
+เพิ่มบรรทัด `<INGRESS_IP> www.id-367.com admin.id-367.com` ลงในไฟล์ hosts ของระบบที่ใช้เปิดเบราว์เซอร์ โดย `<INGRESS_IP>` คือค่าที่หาได้ข้างบน และต้องใช้สิทธิ์ admin
 
 **macOS และ Linux** ไฟล์คือ `/etc/hosts`
 
@@ -138,7 +156,7 @@ Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "`n<INGRESS_IP>
 
 ถ้าเปิดเบราว์เซอร์บน Windows ต้องแก้ไฟล์ hosts ของ Windows ข้างบน การแก้ `/etc/hosts` ใน WSL หรือ Git Bash ไม่มีผลกับเบราว์เซอร์
 
-จากนั้นเปิด URL ด้านล่าง โดยใส่ `<พอร์ต>` เป็นค่า `INGRESS_PORT` ที่หาได้ในข้อ 3 ถ้าพอร์ตเป็น 80 ไม่ต้องใส่พอร์ตใน URL
+จากนั้นเปิด URL ด้านล่าง โดยใส่ `<พอร์ต>` เป็นค่า `INGRESS_PORT` ที่หาได้ข้างบน ถ้าพอร์ตเป็น 80 ไม่ต้องใส่พอร์ตใน URL
 
 - `http://www.id-367.com:<พอร์ต>/about`
 - `http://www.id-367.com:<พอร์ต>/research`
@@ -147,13 +165,27 @@ Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "`n<INGRESS_IP>
 
 เมื่อดูเสร็จให้ลบบรรทัดที่เพิ่มออกจากไฟล์ hosts ด้วย editor ที่เปิดด้วยสิทธิ์ admin
 
+**ทดสอบจากภายนอกด้วย bash (ทางเลือก)** ถ้ามี bash และ `curl` จะรันทดสอบแบบเดียวกับข้อ 3 จากเครื่องของคุณได้ โดยใช้ค่าที่หาได้ข้างบน script นี้บันทึกผลไว้ที่ `tests/results.txt`
+
+```bash
+INGRESS_IP=<INGRESS_IP> INGRESS_PORT=<INGRESS_PORT> ./tests/check.sh
+```
+
 ### 5. เลิกใช้
 
 ```bash
-./teardown.sh
+kubectl delete -k tests --ignore-not-found
+kubectl delete -k .
+kubectl delete pv -l app.kubernetes.io/part-of=k8s-ingress-assignment --ignore-not-found
 ```
 
-คำสั่งนี้ลบเฉพาะ resource ของ assignment นี้ ไม่ลบ ingress-nginx ถ้าแก้โค้ด app แล้วอยากให้ pod ใช้โค้ดใหม่ ให้รัน `./deploy.sh --restart`
+คำสั่งนี้ลบเฉพาะ resource ของ assignment นี้ ไม่ลบ ingress-nginx บรรทัดสุดท้ายใช้เฉพาะเมื่อเคยสร้าง hostPath PV ในข้อ 2 ถ้าใช้ bash จะใช้ `./teardown.sh` แทนก็ได้
+
+ถ้าแก้โค้ด app แล้วอยากให้ pod ใช้โค้ดใหม่ ให้รัน `kubectl apply -k .` ตามด้วยคำสั่งนี้ (ใน bash ใช้ `./deploy.sh --restart` แทนได้)
+
+```bash
+kubectl rollout restart deployment -l app.kubernetes.io/part-of=k8s-ingress-assignment
+```
 
 ## กรณีมี external load balancer (nginx บน VM แยก)
 
@@ -190,14 +222,17 @@ kubectl get deploy,po,svc,ingress,pvc
 kubectl describe ingress ingress-www ingress-admin
 kubectl get endpoints app-about app-research app-api
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=20
-curl -H "Host: www.id-367.com" http://<INGRESS_IP>:<พอร์ต>/api/hello
+curl -H "Host: www.id-367.com" http://<INGRESS_IP>:<INGRESS_PORT>/api/hello
 ```
+
+บรรทัดสุดท้ายใน PowerShell บน Windows ให้พิมพ์ `curl.exe` แทน `curl`
 
 ## ปัญหาที่พบบ่อย
 
 | อาการ | สาเหตุและวิธีแก้ |
 |---|---|
-| `deploy.sh` แจ้งว่ายังไม่มี IngressClass `nginx` | ยังไม่ได้ติดตั้ง ingress-nginx ให้ทำข้อ 1 |
+| `deploy.sh` แจ้งว่ายังไม่มี IngressClass `nginx` หรือ Ingress ไม่มีค่า ADDRESS | ยังไม่ได้ติดตั้ง ingress-nginx ให้ทำข้อ 1 |
+| PVC `app-research-data` ค้าง Pending | cluster ไม่มี default StorageClass ให้ทำตามข้อ 2 (`kubectl apply -f manifests/storage-hostpath.yaml`) ดูสาเหตุเพิ่มด้วย `kubectl describe pvc app-research-data` |
+| Job `ingress-check` เป็น Failed | ดูว่าข้อไหน `FAIL` ด้วย `kubectl logs job/ingress-check` แล้วตรวจ `kubectl get po,ingress` |
 | เปิด URL แล้วได้ 404 จาก nginx | ส่งชื่อโดเมนไม่ตรง ต้องเข้าด้วย `www.id-367.com` หรือ `admin.id-367.com` ไม่ใช่ `localhost` หรือ IP |
 | `check.sh` ได้ status `000` หรือ connection refused | IP หรือพอร์ตผิด หรือ `port-forward` ไม่ได้เปิดค้างไว้ |
-| `check.sh` ล้มทันทีหลัง deploy | pod อาจยังไม่พร้อม ตรวจด้วย `kubectl get po` แล้วรันซ้ำ |
