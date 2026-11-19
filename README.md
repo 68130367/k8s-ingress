@@ -28,7 +28,7 @@ flowchart LR
 ## สิ่งที่ต้องมี
 
 - cluster Kubernetes ที่ `kubectl` ต่อได้ เช่น minikube, Docker Desktop Kubernetes หรือ kubeadm (ตรวจด้วย `kubectl cluster-info`)
-- `bash` และ `curl`
+- `bash` และ `curl` สำหรับรัน script (macOS และ Linux มีอยู่แล้ว ส่วน Windows ให้รันใน Git Bash หรือ WSL)
 - ไม่ต้อง build หรือ push image เพราะทุก app ใช้ image สาธารณะ `python:3.12-alpine` ส่วนโค้ดของแต่ละ app เป็นไฟล์ `app.py` ไฟล์เดียวที่ใช้แค่ stdlib และ `deploy.sh` จะสร้าง ConfigMap จากไฟล์ใน repo แล้ว mount เข้า pod ให้
 - ไม่ต้องแก้อะไรก่อนรัน ชื่อ รหัสนักศึกษา และเลข 3 ตัวท้ายตั้งไว้ใน `config.env` แล้ว รูปอยู่ที่ `app-about/photo.jpg` และสรุปงานวิจัยอยู่ที่ `app-research/research.seed.md`
 
@@ -78,15 +78,43 @@ script จะสร้าง ConfigMap, PVC, Deployment, Service และ Ingre
 
 ### 3. ทดสอบอัตโนมัติ
 
-`tests/check.sh` ยิง request ไปที่ ingress ด้วย `curl --resolve` จึงไม่ต้องแก้ `/etc/hosts` ก่อน ต้องบอก IP และพอร์ตที่เข้า ingress ได้จากเครื่องที่รัน ซึ่งขึ้นกับชนิดของ cluster
+`tests/check.sh` ยิง request ไปที่ ingress ด้วย `curl --resolve` จึงไม่ต้องแก้ไฟล์ hosts ก่อน แต่ต้องบอกว่า request เข้า ingress ได้ที่ไหนด้วยสองค่านี้
 
-| cluster | คำสั่ง |
-|---|---|
-| Docker Desktop Kubernetes | `INGRESS_IP=127.0.0.1 INGRESS_PORT=31080 ./tests/check.sh` |
-| minikube บน Mac (Docker driver) | เปิดเทอร์มินัลหนึ่งไว้รัน `kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80` ค้างไว้ แล้วในอีกเทอร์มินัลรัน `INGRESS_IP=127.0.0.1 INGRESS_PORT=8080 ./tests/check.sh` |
-| VM หรือเครื่องที่เข้า IP ของ node ได้ตรง ๆ | `INGRESS_IP=<IP ของ node> INGRESS_PORT=31080 ./tests/check.sh` |
+- `INGRESS_IP` คือ IP ของเครื่องที่รับ request เข้า ingress-nginx เมื่อมองจากเครื่องที่คุณพิมพ์คำสั่ง
+- `INGRESS_PORT` คือพอร์ตของเครื่องนั้น
 
-บน Mac ที่ใช้ minikube แบบ Docker driver เข้า `minikube ip` ตรง ๆ ไม่ได้ จึงต้องใช้ `port-forward`
+ทั้งสองค่าขึ้นกับว่า cluster เปิดทางเข้าไว้อย่างไร ให้เลือกแถวที่ตรงกับ cluster ของคุณ
+
+| cluster ของคุณ | INGRESS_IP | INGRESS_PORT |
+|---|---|---|
+| Docker Desktop Kubernetes | `127.0.0.1` | `31080` |
+| minikube ที่เข้า IP ของ node ไม่ได้จากเครื่องที่รัน (เช่น Docker driver) | `127.0.0.1` | `8080` (ต้องเปิด `port-forward` ตามคำสั่งด้านล่างตาราง) |
+| minikube ที่เข้า IP ของ node ได้ | ผลของ `minikube ip` | เลขหลัง `80:` ในคอลัมน์ PORT(S) ของ `kubectl get svc -n ingress-nginx ingress-nginx-controller` เช่น `80:31080/TCP` คือ `31080` |
+| kubeadm, VM หรือเครื่องจริง | คอลัมน์ INTERNAL-IP ของ `kubectl get nodes -o wide` (node ไหนก็ได้) ใช้ได้เมื่อเครื่องที่รันต่อ IP นั้นถึง | `31080` ถ้าทำข้อ 1 ตามที่เขียนไว้ |
+| มี external load balancer | IP ของเครื่อง LB | `80` |
+| Service ของ ingress-nginx เป็นชนิด LoadBalancer (เช่น cloud หรือ MetalLB) | คอลัมน์ EXTERNAL-IP ของ `kubectl get svc -n ingress-nginx ingress-nginx-controller` | `80` |
+
+ถ้าใช้แถวที่สอง ให้เปิดเทอร์มินัลหนึ่งรันคำสั่งนี้ค้างไว้ เพราะ node อยู่ใน container ของ Docker จึงเข้า `minikube ip` ตรง ๆ ไม่ได้
+
+```bash
+kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80
+```
+
+ก่อนรัน `check.sh` ลองตรวจสองค่านี้ด้วยคำสั่งเดียว ถ้าได้ `200` แปลว่าเข้า ingress ได้ (ต้อง deploy ตามข้อ 2 แล้ว)
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: www.id-367.com" http://<INGRESS_IP>:<INGRESS_PORT>/about
+```
+
+ถ้าได้ `000` หรือค้างจนหมดเวลา แปลว่าเครื่องที่รันต่อ IP หรือพอร์ตนั้นไม่ถึง ให้ลองแถวอื่นในตาราง เพราะ IP ใน `kubectl get nodes` บางแบบอยู่ในเครือข่ายภายใน เช่น Docker Desktop ที่ได้ `192.168.65.3` ซึ่งเข้าจากเครื่องที่รันไม่ได้ ต้องใช้ `127.0.0.1` แทน
+
+จากนั้นรัน
+
+```bash
+INGRESS_IP=<INGRESS_IP> INGRESS_PORT=<INGRESS_PORT> ./tests/check.sh
+```
+
+ตัวอย่างบน Docker Desktop คือ `INGRESS_IP=127.0.0.1 INGRESS_PORT=31080 ./tests/check.sh`
 
 ผลที่ถูกต้องคือขึ้น `PASS` ครบ 9 ข้อ และบรรทัดสุดท้ายเป็น `---- pass=9 fail=0` script จะบันทึกผลไว้ที่ `tests/results.txt` และจบด้วย exit code 0 เมื่อผ่านทั้งหมด
 
@@ -94,18 +122,30 @@ script จะสร้าง ConfigMap, PVC, Deployment, Service และ Ingre
 
 ingress เลือก app จากชื่อโดเมนที่เบราว์เซอร์ส่งมา เปิด `localhost` หรือ IP ตรง ๆ จะได้ 404 จึงต้องให้เครื่องรู้ว่า `www.id-367.com` และ `admin.id-367.com` คือเครื่องนี้
 
+เพิ่มบรรทัด `<INGRESS_IP> www.id-367.com admin.id-367.com` ลงในไฟล์ hosts ของระบบที่ใช้เปิดเบราว์เซอร์ โดย `<INGRESS_IP>` คือค่าเดียวกับที่หาได้ในข้อ 3 และต้องใช้สิทธิ์ admin
+
+**macOS และ Linux** ไฟล์คือ `/etc/hosts`
+
 ```bash
 echo "<INGRESS_IP> www.id-367.com admin.id-367.com" | sudo tee -a /etc/hosts
 ```
 
-ถ้าเข้าผ่าน Docker Desktop หรือ `port-forward` ให้ใช้ `127.0.0.1` เป็น `<INGRESS_IP>` แล้วเปิด URL ด้วยพอร์ตเดียวกับที่ใช้ในข้อ 3 คือ 31080 หรือ 8080 ส่วนถ้าเข้า ingress ที่พอร์ต 80 ตรง ๆ ไม่ต้องใส่พอร์ตใน URL
+**Windows** ไฟล์คือ `C:\Windows\System32\drivers\etc\hosts` เปิด PowerShell แบบ Run as administrator แล้วรัน
+
+```powershell
+Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "`n<INGRESS_IP> www.id-367.com admin.id-367.com"
+```
+
+ถ้าเปิดเบราว์เซอร์บน Windows ต้องแก้ไฟล์ hosts ของ Windows ข้างบน การแก้ `/etc/hosts` ใน WSL หรือ Git Bash ไม่มีผลกับเบราว์เซอร์
+
+จากนั้นเปิด URL ด้านล่าง โดยใส่ `<พอร์ต>` เป็นค่า `INGRESS_PORT` ที่หาได้ในข้อ 3 ถ้าพอร์ตเป็น 80 ไม่ต้องใส่พอร์ตใน URL
 
 - `http://www.id-367.com:<พอร์ต>/about`
 - `http://www.id-367.com:<พอร์ต>/research`
 - `http://www.id-367.com:<พอร์ต>/api/สวัสดี`
 - `http://admin.id-367.com:<พอร์ต>/`
 
-เมื่อดูเสร็จให้ลบบรรทัดที่เพิ่มออกจาก `/etc/hosts`
+เมื่อดูเสร็จให้ลบบรรทัดที่เพิ่มออกจากไฟล์ hosts ด้วย editor ที่เปิดด้วยสิทธิ์ admin
 
 ### 5. เลิกใช้
 
@@ -138,7 +178,7 @@ client เข้า LB ที่พอร์ต 80 แล้ว LB ส่งต�
    ```bash
    sudo nginx -t && sudo systemctl reload nginx
    ```
-5. ที่เครื่องซึ่งใช้เปิดเว็บ ให้เพิ่มบรรทัด `<IP ของ LB> www.id-367.com admin.id-367.com` ใน `/etc/hosts` แล้วเปิด `http://www.id-367.com/about` ได้เลย ไม่ต้องใส่พอร์ตเพราะ LB ฟังพอร์ต 80
+5. ที่เครื่องซึ่งใช้เปิดเว็บ ให้เพิ่มบรรทัด `<IP ของ LB> www.id-367.com admin.id-367.com` ในไฟล์ hosts (วิธีเพิ่มดูที่ข้อ 4) แล้วเปิด `http://www.id-367.com/about` ได้เลย ไม่ต้องใส่พอร์ตเพราะ LB ฟังพอร์ต 80
 6. ทดสอบด้วย `INGRESS_IP=<IP ของ LB> INGRESS_PORT=80 ./tests/check.sh`
 
 ถ้าใช้ `scp` ไม่ได้ ให้รัน `sudo nano /etc/nginx/sites-enabled/ingress.conf` บน LB แล้ววางเนื้อหาของไฟล์ลงไปเองแทนรายการที่ 1 และ 2 ด้านบน
@@ -161,10 +201,3 @@ curl -H "Host: www.id-367.com" http://<INGRESS_IP>:<พอร์ต>/api/hello
 | เปิด URL แล้วได้ 404 จาก nginx | ส่งชื่อโดเมนไม่ตรง ต้องเข้าด้วย `www.id-367.com` หรือ `admin.id-367.com` ไม่ใช่ `localhost` หรือ IP |
 | `check.sh` ได้ status `000` หรือ connection refused | IP หรือพอร์ตผิด หรือ `port-forward` ไม่ได้เปิดค้างไว้ |
 | `check.sh` ล้มทันทีหลัง deploy | pod อาจยังไม่พร้อม ตรวจด้วย `kubectl get po` แล้วรันซ้ำ |
-
-## ข้อจำกัดที่รู้
-
-- หน้า admin ไม่มี authentication (โจทย์ไม่ได้ขอ) ถ้าใช้งานจริงควรเพิ่ม basic-auth annotation ของ ingress-nginx
-- ไม่มี HTTPS/TLS (โจทย์ไม่ได้ขอ)
-- โค้ด app อยู่ใน ConfigMap ซึ่งจำกัดขนาด 1 MiB ต่อ ConfigMap จึงเหมาะกับ app เล็กแบบนี้ แต่ไม่ใช่แนวทางที่ควรใช้ใน production
-- `app-research` ต้องมี 1 replica เพราะเก็บข้อมูลใน PVC แบบ ReadWriteOnce
