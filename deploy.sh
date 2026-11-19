@@ -60,9 +60,8 @@ for d in app-about app-research app-api; do kubectl rollout status "deployment/$
 
 cat <<EOF
 
-เสร็จแล้ว. ขั้นต่อไป:
-  1) หา IP ของ ingress controller แล้วเพิ่มใน /etc/hosts:
-       <INGRESS_IP>  www.${DOMAIN} admin.${DOMAIN}
-     (minikube: \`minikube ip\`; kubeadm/VM: IP ของ node หรือ LoadBalancer ตาม lab)
-  2) ตรวจสอบ:  INGRESS_IP=<ip> INGRESS_PORT=<port> ./tests/check.sh
+เสร็จแล้ว. ขั้นต่อไปทำตาม README ข้อ 3 และข้อ 4
+  1) หา INGRESS_IP และ INGRESS_PORT ตามตารางใน README ข้อ 3 แล้วทดสอบ:
+       INGRESS_IP=<ip> INGRESS_PORT=<port> ./tests/check.sh
+  2) ถ้าจะเปิดด้วยเบราว์เซอร์ ให้เพิ่ม www.${DOMAIN} และ admin.${DOMAIN} ในไฟล์ hosts (README ข้อ 4)
 EOF
