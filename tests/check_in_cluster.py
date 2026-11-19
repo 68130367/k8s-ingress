@@ -12,9 +12,9 @@ WWW = "www." + DOMAIN
 ADMIN = "admin." + DOMAIN
 
 
-def fetch(host, path, want):
+def fetch(host, path, want, tries=10):
     code, body = 0, ""
-    for _ in range(10):
+    for _ in range(tries):
         try:
             conn = http.client.HTTPConnection(TARGET, PORT, timeout=5)
             conn.request("GET", path, headers={"Host": host})
@@ -28,6 +28,16 @@ def fetch(host, path, want):
             break
         time.sleep(1)
     return code, body
+
+
+def wait_until_ready(seconds=90):
+    end = time.time() + seconds
+    for host, path in ((WWW, "/about"), (WWW, "/research"), (WWW, "/api/ready"), (ADMIN, "/")):
+        while time.time() < end:
+            code, _ = fetch(host, path, 200, tries=1)
+            if code == 200:
+                break
+            time.sleep(2)
 
 
 results = {"pass": 0, "fail": 0}
@@ -45,6 +55,7 @@ def check(name, host, path, want, needle=""):
 
 
 print(f"# check (in-cluster)  {datetime.now():%F %T}  target={TARGET}:{PORT}  domain={DOMAIN}")
+wait_until_ready()
 check("about แสดงรหัสนักศึกษา", WWW, "/about", 200, SID)
 check("about มีรูป", WWW, "/about/photo", 200)
 check("research แสดงหน้าสรุป", WWW, "/research", 200, "สรุปงานวิจัย")

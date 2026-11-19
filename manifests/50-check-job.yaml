@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/part-of: k8s-ingress-assignment
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 240
+  activeDeadlineSeconds: 300
   template:
     spec:
       restartPolicy: Never

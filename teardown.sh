@@ -2,6 +2,5 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-kubectl delete -k tests --ignore-not-found
 kubectl delete -k . --ignore-not-found
 kubectl delete pv -l app.kubernetes.io/part-of=k8s-ingress-assignment --ignore-not-found

@@ -6,6 +6,7 @@ resources:
   - manifests/20-app-research.yaml
   - manifests/30-app-api.yaml
   - manifests/40-ingress.yaml
+  - manifests/50-check-job.yaml
 
 generatorOptions:
   disableNameSuffixHash: true
@@ -29,3 +30,6 @@ configMapGenerator:
   - name: app-api-code
     files:
       - app.py=app-api/app.py
+  - name: ingress-check-script
+    files:
+      - check_in_cluster.py=tests/check_in_cluster.py

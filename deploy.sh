@@ -33,5 +33,6 @@ for d in app-about app-research app-api; do kubectl rollout status "deployment/$
 
 cat <<EOF
 
-เสร็จแล้ว. ขั้นต่อไปทำตาม README ข้อ 3 (ทดสอบ) และข้อ 4 (เปิดด้วยเบราว์เซอร์)
+เสร็จแล้ว. ดูผลทดสอบด้วย:  kubectl logs -f job/ingress-check --pod-running-timeout=180s
+ถ้าจะเปิดด้วยเบราว์เซอร์ ทำตาม README ข้อ 3
 EOF
