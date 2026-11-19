@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: app-research-pv
+  labels:
+    app.kubernetes.io/part-of: k8s-ingress-assignment
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/app-research
+    type: DirectoryOrCreate
